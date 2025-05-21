@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 
-API_BASE = "http://localhost:5000"
+API_BASE = "https://stock-alert-odjb.onrender.com"
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"  # ⬅️ Replace this
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
