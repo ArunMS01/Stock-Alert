@@ -7,12 +7,14 @@ TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
 st.title("📈 Stock Alert System")
-st.info(f"""
-step 1. Please Add bot in your telegram.
-Step 2. Fill form according to your requirement about which stock alert you need for what price.
-Step 3. By your telegram username you can see your alerts **** ALWAYS ADD @ to your telegram username.
-Step 4. With STOCK name should be in capslock.
+st.info("""
+**Step 1:** Please add the bot in your Telegram.  
+**Step 2:** Fill the form according to your requirement about which stock alert you need for what price.  
+**Step 3:** By your Telegram username, you can see your alerts.  
+**⚠️ Always add `@` before your Telegram username.**  
+**⚠️ The stock symbol should be in CAPSLOCK.**
 """)
+
 # 📢 Telegram Registration Info
 st.markdown("### 💬 Telegram Setup")
 st.info(f"""
