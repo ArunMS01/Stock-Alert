@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 
 API_BASE = "https://stock-alert-odjb.onrender.com"
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"  # ⬅️ Replace this
@@ -41,18 +40,30 @@ with st.form("alert_form"):
                 st.success("✅ Alert added successfully!")
                 st.info("⏳ Make sure you have sent a message to the bot so alerts can be delivered.")
             else:
-                st.error("❌ Failed to add alert.")
+                try:
+                    error_msg = response.json().get("error", "Failed to add alert.")
+                except:
+                    error_msg = "Failed to add alert."
+                st.error(f"❌ {error_msg}")
 
-# Show Active Alerts
-st.header("📋 Active Alerts")
-try:
-    alerts = requests.get(f"{API_BASE}/alerts").json()
-    if alerts:
-        for alert in alerts:
-            st.write(
-                f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}"
-            )
-    else:
-        st.info("No active alerts.")
-except Exception as e:
-    st.error("⚠️ Failed to fetch active alerts.")
+# Show Active Alerts for the user only
+st.header("📋 Your Active Alerts")
+username_for_alerts = st.text_input("Enter your Telegram username to view your alerts (e.g., @john_doe)")
+if username_for_alerts and username_for_alerts.startswith("@"):
+    try:
+        response = requests.post(f"{API_BASE}/alerts", json={"username": username_for_alerts})
+        if response.status_code == 200:
+            alerts = response.json()
+            if alerts:
+                for alert in alerts:
+                    st.write(
+                        f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}"
+                    )
+            else:
+                st.info("No active alerts for your username.")
+        else:
+            st.error("⚠️ Failed to fetch your alerts.")
+    except Exception as e:
+        st.error(f"⚠️ Failed to fetch your alerts: {e}")
+elif username_for_alerts:
+    st.error("❌ Please enter a valid Telegram username starting with '@'.")
