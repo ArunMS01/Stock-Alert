@@ -10,7 +10,7 @@ app = Flask(__name__)
 
 ALERTS_FILE = "alerts.json"
 USERS_FILE = "telegram_users.json"
-BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace this with your actual bot token
+BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace with your actual bot token
 
 # Helper functions
 def load_alerts():
@@ -77,10 +77,10 @@ def send_telegram_alert(chat_id, message):
     )
 
 def get_price(symbol):
-   
-
+    # Add NSE suffix for yfinance
+    yf_symbol = symbol + ".NS"
     try:
-        ticker = yf.Ticker(symbol + ".NS")
+        ticker = yf.Ticker(yf_symbol)
         price = ticker.history(period="1d")["Close"].iloc[-1]
         print(f"✅ Fetched price for {symbol}: ₹{price}")
         return round(price, 2)
@@ -94,8 +94,8 @@ def add_alert():
     data = request.get_json()
     symbol = data["symbol"].upper()
 
-    # Validate symbol before saving
-    ticker = yf.Ticker(symbol + ".NS")
+    # Validate symbol by checking data with .NS suffix on yfinance
+    ticker = yf.Ticker(symbol)
     hist = ticker.history(period="1d")
     if hist.empty:
         return jsonify({"error": "Invalid NSE symbol"}), 400
