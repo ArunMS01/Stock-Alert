@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import yfinance as yf
 
-API_BASE = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"
+API_BASE = "https://stock-alert-odjb.onrender.com"
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
