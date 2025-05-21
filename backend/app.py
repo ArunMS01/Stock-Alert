@@ -1,59 +1,128 @@
-
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import os
 import json
-from telegram import Bot
+import os
+import requests
+import yfinance as yf
 
 app = Flask(__name__)
-CORS(app)
 
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-bot = Bot(token=TOKEN)
+ALERTS_FILE = "alerts.json"
+USERS_FILE = "telegram_users.json"
+BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace with your actual bot token
 
-USERS_FILE = 'telegram_users.json'
-ALERTS_FILE = 'alerts.json'
-
-def load_json(path):
-    if not os.path.exists(path):
+# Helper functions
+def load_alerts():
+    if not os.path.exists(ALERTS_FILE):
         return []
-    with open(path, 'r') as f:
+    with open(ALERTS_FILE, "r") as f:
         return json.load(f)
 
-def save_json(path, data):
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=4)
-
-@app.route('/register', methods=['POST'])
-def register_user():
-    user_id = request.json.get('user_id')
-    users = load_json(USERS_FILE)
-    if user_id not in users:
-        users.append(user_id)
-        save_json(USERS_FILE, users)
-        return jsonify({"message": "User registered successfully"}), 201
-    return jsonify({"message": "User already exists"}), 200
-
-@app.route('/alerts', methods=['GET', 'POST'])
-def manage_alerts():
-    if request.method == 'POST':
-        alert = request.json.get('message')
-        alerts = load_json(ALERTS_FILE)
-        alerts.append({"message": alert})
-        save_json(ALERTS_FILE, alerts)
-        send_alert_to_all(alert)
-        return jsonify({"message": "Alert sent"}), 201
-    else:
-        alerts = load_json(ALERTS_FILE)
-        return jsonify(alerts), 200
-
-def send_alert_to_all(message):
-    users = load_json(USERS_FILE)
-    for user_id in users:
+def save_alerts(alerts):
+    with open(ALERTS_FILE, "w") as f:
+        json.dump(alerts, f, indent=2)
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        print("ℹ️ No users file found. Creating a new one.")
+        return {}
+    with open(USERS_FILE, "r") as f:
         try:
-            bot.send_message(chat_id=user_id, text=message)
-        except Exception as e:
-            print(f"Failed to send to {user_id}: {e}")
+            data = f.read()  # Read raw data
+            print(f"Users File Content: {data}")  # Print raw data for debugging
+            return json.loads(data)  # Attempt to parse JSON
+        except json.JSONDecodeError:
+            print("❌ Error: The users file is empty or contains invalid JSON. Returning empty dictionary.")
+            return {}
+
+def save_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f, indent=2)
+
+def register_users_from_updates():
+    updates = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates").json()
+
+    if not updates.get("ok"):
+        print("❌ Failed to get updates:", updates)
+        return
+
+    registered_users = load_users()
+    new_users = 0
+
+    for update in updates.get("result", []):
+        msg = update.get("message", {}) or update.get("edited_message", {})
+        user = msg.get("from", {})
+
+        username = user.get("username")
+        chat_id = user.get("id")
+
+        if username:
+            username = "@" + username
+            if username not in registered_users:
+                registered_users[username] = chat_id
+                new_users += 1
+                print(f"✅ Registered: {username} → Chat ID: {chat_id}")
+
+    if new_users:
+        save_users(registered_users)
+        print(f"💾 Saved {new_users} new user(s) to {USERS_FILE}")
+    else:
+        print("ℹ️ No new users to register.")
+
+def send_telegram_alert(chat_id, message):
+    requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        data={"chat_id": chat_id, "text": message}
+    )
+
+def get_price(symbol):
+    try:
+        ticker = yf.Ticker(symbol + ".NS")  # Append '.NS' for NSE stocks
+        price = ticker.history(period="1d")["Close"].iloc[-1]
+        print(f"✅ Fetched price for {symbol}: ₹{price}")
+        return round(price, 2)
+    except Exception as e:
+        print(f"❌ Error fetching price for {symbol}: {e}")
+        return 0.0
+
+# API endpoints
+@app.route("/add-alert", methods=["POST"])
+def add_alert():
+    data = request.get_json()
+    alert = {
+        "symbol": data["symbol"],
+        "condition": data["condition"],
+        "price": data["price"],
+        "username": data["username"]
+    }
+    alerts = load_alerts()
+    alerts.append(alert)
+    save_alerts(alerts)
+    return jsonify({"message": "Alert saved"}), 200
+
+@app.route("/alerts", methods=["GET"])
+def get_alerts():
+    return jsonify(load_alerts())
+
+@app.route("/check-alerts", methods=["GET"])
+def check_alerts():
+    register_users_from_updates()
+    alerts = load_alerts()
+    users = load_users()
+
+    triggered = []
+    for alert in alerts:
+        current_price = get_price(alert["symbol"])
+        hit = (alert["condition"] == "above" and current_price > alert["price"]) or \
+              (alert["condition"] == "below" and current_price < alert["price"])
+
+        if hit:
+            username = alert["username"]
+            chat_id = users.get(username)
+            if chat_id:
+                message = f"🔔 {alert['symbol']} is {alert['condition']} {alert['price']} (Current: {current_price})"
+                send_telegram_alert(chat_id, message)
+                triggered.append(alert)
+
+    return jsonify({"triggered": triggered}), 200
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
