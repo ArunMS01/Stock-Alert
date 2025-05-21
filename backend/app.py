@@ -101,7 +101,7 @@ def add_alert():
     save_alerts(alerts)
     return jsonify({"message": "Alert saved"}), 200
 
-@app.route("/alerts", methods=["GET"])
+@app.route("/alerts", methods=["POST"])
 def get_alerts():
     return jsonify(load_alerts())
 
