@@ -90,7 +90,7 @@ if username_for_alerts and not username_for_alerts.startswith("@"):
 elif username_for_alerts:
     if st.button("Fetch My Alerts"):
         try:
-            response = requests.get(f"{API_BASE}/alerts", json={"username": username_for_alerts})
+            response = requests.post(f"{API_BASE}/alerts", json={"username": username_for_alerts})
             if response.status_code == 200:
                 alerts = response.json()
                 if alerts:
