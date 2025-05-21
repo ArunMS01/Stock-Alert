@@ -20,7 +20,7 @@ def validate_symbol(symbol):
     if not symbol:
         return False
     try:
-        ticker = yf.Ticker(symbol + ".NS")
+        ticker = yf.Ticker(symbol)
         hist = ticker.history(period="1d")
         return not hist.empty
     except:
