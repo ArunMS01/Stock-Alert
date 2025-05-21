@@ -77,9 +77,7 @@ def send_telegram_alert(chat_id, message):
     )
 
 def get_price(symbol):
-    # Remove .NS suffix if mistakenly sent
-    if symbol.endswith(".NS"):
-        symbol = symbol[:-3]
+   
 
     try:
         ticker = yf.Ticker(symbol + ".NS")
@@ -95,8 +93,6 @@ def get_price(symbol):
 def add_alert():
     data = request.get_json()
     symbol = data["symbol"].upper()
-    if symbol.endswith(".NS"):
-        symbol = symbol[:-3]
 
     # Validate symbol before saving
     ticker = yf.Ticker(symbol + ".NS")
