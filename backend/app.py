@@ -99,7 +99,7 @@ def add_alert():
         symbol = symbol[:-3]
 
     # Validate symbol before saving
-    ticker = yf.Ticker(symbol)
+    ticker = yf.Ticker(symbol + ".NS")
     hist = ticker.history(period="1d")
     if hist.empty:
         return jsonify({"error": "Invalid NSE symbol"}), 400
