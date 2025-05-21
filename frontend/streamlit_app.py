@@ -7,13 +7,6 @@ TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
 st.title("📈 Stock Alert System")
-st.info("""
-**Step 1:** Please add the bot in your Telegram.  
-**Step 2:** Fill the form according to your requirement about which stock alert you need for what price.  
-**Step 3:** By your Telegram username, you can see your alerts.  
-**⚠️ Always add `@` before your Telegram username.**  
-**⚠️ The stock symbol should be in CAPSLOCK.**
-""")
 
 # 📢 Telegram Registration Info
 st.markdown("### 💬 Telegram Setup")
@@ -93,8 +86,11 @@ elif username_for_alerts:
             response = requests.post(f"{API_BASE}/alerts", json={"username": username_for_alerts})
             if response.status_code == 200:
                 alerts = response.json()
-                if alerts:
-                    for alert in alerts:
+                # Filter alerts for the given username
+                user_alerts = [alert for alert in alerts if alert['username'] == username_for_alerts]
+
+                if user_alerts:
+                    for alert in user_alerts:
                         st.write(
                             f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}"
                         )
