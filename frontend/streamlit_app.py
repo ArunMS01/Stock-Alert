@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import yfinance as yf
 
-API_BASE = "https://stock-alert-odjb.onrender.com"
+API_BASE = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
@@ -20,7 +20,7 @@ def validate_symbol(symbol):
     if not symbol:
         return False
     try:
-        ticker = yf.Ticker(symbol + '.NS')
+        ticker = yf.Ticker(symbol)
         hist = ticker.history(period="1d")
         return not hist.empty
     except:
