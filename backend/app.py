@@ -1,14 +1,16 @@
 from flask import Flask, request, jsonify
+from apscheduler.schedulers.background import BackgroundScheduler
 import json
 import os
 import requests
 import yfinance as yf
+import atexit
 
 app = Flask(__name__)
 
 ALERTS_FILE = "alerts.json"
 USERS_FILE = "telegram_users.json"
-BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace with your actual bot token
+BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace this with your actual bot token
 
 # Helper functions
 def load_alerts():
@@ -20,15 +22,16 @@ def load_alerts():
 def save_alerts(alerts):
     with open(ALERTS_FILE, "w") as f:
         json.dump(alerts, f, indent=2)
+
 def load_users():
     if not os.path.exists(USERS_FILE):
         print("ℹ️ No users file found. Creating a new one.")
         return {}
     with open(USERS_FILE, "r") as f:
         try:
-            data = f.read()  # Read raw data
-            print(f"Users File Content: {data}")  # Print raw data for debugging
-            return json.loads(data)  # Attempt to parse JSON
+            data = f.read()
+            print(f"Users File Content: {data}")
+            return json.loads(data)
         except json.JSONDecodeError:
             print("❌ Error: The users file is empty or contains invalid JSON. Returning empty dictionary.")
             return {}
@@ -75,7 +78,7 @@ def send_telegram_alert(chat_id, message):
 
 def get_price(symbol):
     try:
-        ticker = yf.Ticker(symbol + ".NS")  # Append '.NS' for NSE stocks
+        ticker = yf.Ticker(symbol + ".NS")
         price = ticker.history(period="1d")["Close"].iloc[-1]
         print(f"✅ Fetched price for {symbol}: ₹{price}")
         return round(price, 2)
@@ -104,6 +107,11 @@ def get_alerts():
 
 @app.route("/check-alerts", methods=["GET"])
 def check_alerts():
+    result = run_alert_check()
+    return jsonify(result), 200
+
+# Background job function
+def run_alert_check():
     register_users_from_updates()
     alerts = load_alerts()
     users = load_users()
@@ -122,8 +130,21 @@ def check_alerts():
                 send_telegram_alert(chat_id, message)
                 triggered.append(alert)
 
-    return jsonify({"triggered": triggered}), 200
+    if triggered:
+        print(f"✅ Triggered {len(triggered)} alert(s): {triggered}")
+    else:
+        print("ℹ️ No alerts triggered this cycle.")
 
+    return {"triggered": triggered}
+
+# Scheduler setup
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=run_alert_check, trigger="interval", minutes=1)
+scheduler.start()
+
+# Gracefully shut down the scheduler
+atexit.register(lambda: scheduler.shutdown())
+
+# Run Flask app
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
