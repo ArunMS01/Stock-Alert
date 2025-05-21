@@ -2,7 +2,7 @@
 import streamlit as st
 import requests
 
-BACKEND_URL = "http://localhost:5000"
+BACKEND_URL = "https://stock-alert-odjb.onrender.com"
 
 st.title("📈 Stock Alert System")
 
