@@ -90,7 +90,7 @@ def get_price(symbol):
         symbol = symbol + ".NS"
 
     try:
-        ticker = yf.Ticker(symbol + '.NS')
+        ticker = yf.Ticker(symbol)
         hist = ticker.history(period="1d")
         if hist.empty:
             print(f"❌ No price data for {symbol}")
@@ -111,7 +111,7 @@ def add_alert():
         symbol = symbol + ".NS"
 
     # Validate symbol before saving (check if price data available)
-    ticker = yf.Ticker(symbol + '.NS')
+    ticker = yf.Ticker(symbol)
     hist = ticker.history(period="1d")
     if hist.empty:
         return jsonify({"error": "Invalid NSE symbol or no data available"}), 400
