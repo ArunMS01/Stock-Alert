@@ -1,5 +1,10 @@
-Flask
-python-telegram-bot==20.3
-flask-cors
-requests
-yfinance
+Flask==3.0.3
+requests==2.31.0
+yfinance==0.2.40
+apscheduler==3.10.4
+pandas==2.2.2
+numpy==1.26.4
+python-dateutil==2.9.0.post0
+six==1.16.0
+pytz==2024.1
+tzdata==2024.1
