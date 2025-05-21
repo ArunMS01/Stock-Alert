@@ -5,12 +5,22 @@ import os
 import requests
 import yfinance as yf
 import atexit
+from datetime import datetime, time
+import pytz
 
 app = Flask(__name__)
 
 ALERTS_FILE = "alerts.json"
 USERS_FILE = "telegram_users.json"
-BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace with your actual bot token
+BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace with your bot token
+
+# Market hours for NSE (9:15 AM - 3:30 PM IST)
+def is_market_open():
+    india_tz = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(india_tz).time()
+    market_open = time(9, 15)
+    market_close = time(15, 30)
+    return market_open <= now <= market_close
 
 # Helper functions
 def load_alerts():
@@ -42,28 +52,22 @@ def save_users(users):
 
 def register_users_from_updates():
     updates = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates").json()
-
     if not updates.get("ok"):
         print("❌ Failed to get updates:", updates)
         return
-
     registered_users = load_users()
     new_users = 0
-
     for update in updates.get("result", []):
         msg = update.get("message", {}) or update.get("edited_message", {})
         user = msg.get("from", {})
-
         username = user.get("username")
         chat_id = user.get("id")
-
         if username:
             username = "@" + username
             if username not in registered_users:
                 registered_users[username] = chat_id
                 new_users += 1
                 print(f"✅ Registered: {username} → Chat ID: {chat_id}")
-
     if new_users:
         save_users(registered_users)
         print(f"💾 Saved {new_users} new user(s) to {USERS_FILE}")
@@ -77,28 +81,40 @@ def send_telegram_alert(chat_id, message):
     )
 
 def get_price(symbol):
-    # Add NSE suffix for yfinance
-    yf_symbol = symbol + ".NS"
+    if not is_market_open():
+        print(f"ℹ️ Market closed — skipping price fetch for {symbol}")
+        return None  # Price unavailable outside market hours
+
+    # Always add .NS suffix
+    if not symbol.endswith(".NS"):
+        symbol = symbol + ".NS"
+
     try:
-        ticker = yf.Ticker(yf_symbol)
-        price = ticker.history(period="1d")["Close"].iloc[-1]
+        ticker = yf.Ticker(symbol + '.NS')
+        hist = ticker.history(period="1d")
+        if hist.empty:
+            print(f"❌ No price data for {symbol}")
+            return None
+        price = hist["Close"].iloc[-1]
         print(f"✅ Fetched price for {symbol}: ₹{price}")
         return round(price, 2)
     except Exception as e:
         print(f"❌ Error fetching price for {symbol}: {e}")
-        return 0.0
+        return None
 
 # API endpoints
 @app.route("/add-alert", methods=["POST"])
 def add_alert():
     data = request.get_json()
     symbol = data["symbol"].upper()
+    if not symbol.endswith(".NS"):
+        symbol = symbol + ".NS"
 
-    # Validate symbol by checking data with .NS suffix on yfinance
-    ticker = yf.Ticker(symbol)
+    # Validate symbol before saving (check if price data available)
+    ticker = yf.Ticker(symbol + '.NS')
     hist = ticker.history(period="1d")
     if hist.empty:
-        return jsonify({"error": "Invalid NSE symbol"}), 400
+        return jsonify({"error": "Invalid NSE symbol or no data available"}), 400
 
     alert = {
         "symbol": symbol,
@@ -125,10 +141,14 @@ def run_alert_check():
     register_users_from_updates()
     alerts = load_alerts()
     users = load_users()
-
     triggered = []
+
     for alert in alerts:
         current_price = get_price(alert["symbol"])
+        if current_price is None:
+            print(f"ℹ️ Skipping alert for {alert['symbol']} because price unavailable.")
+            continue
+
         hit = (alert["condition"] == "above" and current_price > alert["price"]) or \
               (alert["condition"] == "below" and current_price < alert["price"])
 
