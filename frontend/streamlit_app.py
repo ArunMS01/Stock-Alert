@@ -52,13 +52,10 @@ can_submit = symbol_valid and username_valid and price_valid
 
 if st.button("Add Alert", disabled=not can_submit):
     try:
-        # Send symbol WITHOUT '.NS' suffix to backend
-        symbol_to_send = symbol  # raw symbol like "TATAMOTORS"
-        
         response = requests.post(
             f"{API_BASE}/add-alert",
             json={
-                "symbol": symbol_to_send,
+                "symbol": symbol,
                 "condition": condition,
                 "price": price,
                 "username": username,
@@ -89,11 +86,8 @@ elif username_for_alerts:
             response = requests.post(f"{API_BASE}/alerts", json={"username": username_for_alerts})
             if response.status_code == 200:
                 alerts = response.json()
-                # Filter alerts for the given username
-                user_alerts = [alert for alert in alerts if alert['username'] == username_for_alerts]
-
-                if user_alerts:
-                    for alert in user_alerts:
+                if alerts:
+                    for alert in alerts:
                         st.write(
                             f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}"
                         )
