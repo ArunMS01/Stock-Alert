@@ -85,7 +85,6 @@ def get_price(symbol):
         print(f"ℹ️ Market closed — skipping price fetch for {symbol}")
         return None  # Price unavailable outside market hours
 
-    # Always add .NS suffix
     if not symbol.endswith(".NS"):
         symbol = symbol + ".NS"
 
@@ -110,7 +109,6 @@ def add_alert():
     if not symbol.endswith(".NS"):
         symbol = symbol + ".NS"
 
-    # Validate symbol before saving (check if price data available)
     ticker = yf.Ticker(symbol)
     hist = ticker.history(period="1d")
     if hist.empty:
@@ -135,6 +133,31 @@ def get_alerts():
 def check_alerts():
     result = run_alert_check()
     return jsonify(result), 200
+
+@app.route("/delete-alert", methods=["POST"])
+def delete_alert():
+    data = request.get_json()
+    symbol = data.get("symbol", "").upper()
+    if not symbol.endswith(".NS"):
+        symbol = symbol + ".NS"
+    username = data.get("username")
+    condition = data.get("condition")
+    price = data.get("price")
+
+    alerts = load_alerts()
+
+    new_alerts = [alert for alert in alerts if not (
+        alert["symbol"] == symbol and
+        alert["username"] == username and
+        alert["condition"] == condition and
+        alert["price"] == price
+    )]
+
+    if len(new_alerts) == len(alerts):
+        return jsonify({"message": "No matching alert found to delete."}), 404
+
+    save_alerts(new_alerts)
+    return jsonify({"message": "Alert deleted successfully."}), 200
 
 # Background job function
 def run_alert_check():
@@ -172,7 +195,6 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=run_alert_check, trigger="interval", minutes=1)
 scheduler.start()
 
-# Gracefully shut down the scheduler
 atexit.register(lambda: scheduler.shutdown())
 
 # Run Flask app
