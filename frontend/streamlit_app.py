@@ -86,11 +86,36 @@ elif username_for_alerts:
             response = requests.post(f"{API_BASE}/alerts", json={"username": username_for_alerts})
             if response.status_code == 200:
                 alerts = response.json()
-                if alerts:
-                    for alert in alerts:
-                        st.write(
-                            f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}"
-                        )
+
+                # Filter alerts for this user
+                user_alerts = [alert for alert in alerts if alert["username"] == username_for_alerts]
+
+                if user_alerts:
+                    for alert in user_alerts:
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            st.write(
+                                f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}"
+                            )
+                        with col2:
+                            delete_label = f"Delete-{alert['symbol']}-{alert['condition']}-{alert['price']}"
+                            if st.button("🗑️", key=delete_label):
+                                try:
+                                    del_response = requests.post(
+                                        f"{API_BASE}/delete-alert",
+                                        json={
+                                            "symbol": alert["symbol"],
+                                            "condition": alert["condition"],
+                                            "price": alert["price"],
+                                            "username": alert["username"],
+                                        },
+                                    )
+                                    if del_response.status_code == 200:
+                                        st.success(f"✅ Deleted alert for {alert['symbol']} {alert['condition']} {alert['price']}")
+                                    else:
+                                        st.error("❌ Failed to delete alert.")
+                                except Exception as e:
+                                    st.error(f"⚠️ Error deleting alert: {e}")
                 else:
                     st.info("No active alerts for your username.")
             else:
