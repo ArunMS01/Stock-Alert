@@ -1,12 +1,29 @@
 import streamlit as st
+
+# Set config — must be first Streamlit command
+st.set_page_config(page_title="📈 Stock Alert System", page_icon="📊")
+
 import requests
 import yfinance as yf
-st.set_page_config(page_title="📈 Stock Alert System", page_icon="📊")
+import streamlit.components.v1 as components
+
 API_BASE = "https://stock-alert-odjb.onrender.com"
 
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
+# Force sidebar open immediately
+components.html(
+    """
+    <script>
+    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+    if (sidebar) {
+        sidebar.style.transform = 'translateX(0%)';
+    }
+    </script>
+    """,
+    height=0,
+)
 
 
 def signup():
