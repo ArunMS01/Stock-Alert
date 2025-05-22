@@ -101,7 +101,7 @@ def fetch_alerts(username):
 if st.session_state.get("logged_out", False):
     st.session_state.pop("logged_in_user", None)
     st.session_state["logged_out"] = False
-    st.experimental_set_query_params()  # Clear query params
+    st.query_params = {}  # Clear query params
     st.stop()  # Stop here so page reloads cleanly
 
 
@@ -115,7 +115,7 @@ else:
     st.sidebar.write(f"👤 Logged in as: **{st.session_state.logged_in_user}**")
     if st.sidebar.button("Logout"):
         st.session_state["logged_out"] = True
-        st.experimental_set_query_params()
+        st.query_params = {}  # Clear query params
         st.stop()
 
 
@@ -179,7 +179,7 @@ with tab2:
                             st.success(f"✅ Deleted alert for {alert['symbol']}")
                             # Increment to trigger UI refresh
                             st.session_state["alerts_updated"] += 1
-                            st.experimental_set_query_params()
+                            st.query_params = {}  # Clear query params
                             st.stop()
                         else:
                             st.error("❌ Failed to delete alert.")
