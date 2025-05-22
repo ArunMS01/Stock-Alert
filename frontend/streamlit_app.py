@@ -1,7 +1,22 @@
 import streamlit as st
 import requests
 import yfinance as yf
+st.set_page_config(page_title="📈 Stock Alert System", page_icon="📊")
 
+import streamlit.components.v1 as components
+
+# Force sidebar open on load
+components.html(
+    """
+    <script>
+    const sidebar = window.parent.document.querySelector('.css-1v0mbdj');
+    if (sidebar) {
+        sidebar.style.transform = 'translateX(0%)';
+    }
+    </script>
+    """,
+    height=0,
+)
 API_BASE = "https://stock-alert-odjb.onrender.com"
 
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
