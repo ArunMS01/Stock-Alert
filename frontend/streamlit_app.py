@@ -11,20 +11,24 @@ API_BASE = "https://stock-alert-odjb.onrender.com"
 
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
-
-# Force sidebar open immediately
+# Inject JS to auto-open sidebar on both desktop and mobile
 components.html(
     """
     <script>
-    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-    if (sidebar) {
-        sidebar.style.transform = 'translateX(0%)';
-    }
+    window.addEventListener('load', function() {
+        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+        if (sidebar) {
+            sidebar.style.transform = 'translateX(0%)';
+        }
+        const expander = window.parent.document.querySelector('[data-testid="stSidebar"] button[aria-label="Close sidebar"]');
+        if (expander) {
+            expander.click(); // toggle open if initially closed
+        }
+    });
     </script>
     """,
-    height=0,
+    height=0
 )
-
 
 def signup():
     st.sidebar.header("🆕 Signup")
