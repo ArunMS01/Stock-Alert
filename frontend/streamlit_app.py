@@ -3,7 +3,7 @@ import requests
 import yfinance as yf
 
 # API Base URL
-API_BASE = "http://127.0.0.1:5000"
+API_BASE = "https://stock-alert-odjb.onrender.com"
 
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
