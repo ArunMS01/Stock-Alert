@@ -27,13 +27,6 @@ components.html(
         font-size: 13px;
         z-index: 1000;
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        animation: fadeout 60s forwards;
-    }
-
-    @keyframes fadeout {
-        0% {opacity: 1;}
-        80% {opacity: 1;}
-        100% {opacity: 0;}
     }
     </style>
 
@@ -54,6 +47,7 @@ components.html(
     """,
     height=0
 )
+
 def signup():
     st.sidebar.header("🆕 Signup")
     st.sidebar.markdown(f"👉 Please message our Telegram bot first: [Click here to open bot]({BOT_LINK})")
@@ -105,7 +99,7 @@ def fetch_users():
     try:
         resp = requests.get(f"{API_BASE}/get-users")
         if resp.status_code == 200:
-            return resp.json()  # { "@telegramusername": {...}, ... }
+            return resp.json()
         else:
             st.sidebar.error("Failed to load users from backend.")
             return {}
@@ -123,33 +117,38 @@ def validate_symbol(symbol):
     except:
         return False
 
-# Initialize session state flags
+# Session state flags
 if "show_login" not in st.session_state:
     st.session_state.show_login = True
 if "refresh_alerts" not in st.session_state:
     st.session_state.refresh_alerts = False
 
-# Handle logout
+# Logout
 if st.session_state.get("logged_in_user") and st.sidebar.button("Logout"):
     st.session_state.pop("logged_in_user")
     st.session_state.show_login = True
     st.session_state.refresh_alerts = False
-
-    # Clear query params with new API
     st.query_params.clear()
-    # No rerun needed — stop here so login screen appears
     st.stop()
 
+# If not logged in — show signup/login and a welcome message
 if st.session_state.show_login or "logged_in_user" not in st.session_state:
     users = fetch_users()
     signup()
     login(users)
+
+    st.markdown("""
+        <div style="text-align: center; margin-top: 120px;">
+            <h2>📈 Welcome to Stock Alert System 📊</h2>
+            <p style="font-size:16px;">Use the sidebar to signup or login and start setting your stock alerts.</p>
+        </div>
+    """, unsafe_allow_html=True)
+
     st.stop()
 
 username = st.session_state.logged_in_user
 
 st.title("📈 Stock Alert System")
-
 st.markdown(f"""
 Welcome **{username}**!  
 Make sure you have messaged our bot [here]({BOT_LINK}) to receive alerts.
@@ -184,6 +183,7 @@ with tab1:
                     st.error(f"❌ {response.json().get('error', 'Failed to add alert.')}")
             except Exception as e:
                 st.error(f"⚠️ Connection error: {e}")
+
 with tab2:
     st.subheader("📋 Your Active Alerts")
 
@@ -199,11 +199,9 @@ with tab2:
             st.error(f"⚠️ Error fetching alerts: {e}")
             return []
 
-    # Initial fetch or if refresh flag is True
     if "alerts_cache" not in st.session_state:
         st.session_state.alerts_cache = fetch_alerts(username)
 
-    # Refresh button at the top
     if st.button("🔄 Refresh Alerts"):
         st.session_state.alerts_cache = fetch_alerts(username)
 
@@ -221,7 +219,6 @@ with tab2:
                         del_response = requests.post(f"{API_BASE}/delete-alert", json={"id": alert["id"]})
                         if del_response.status_code == 200:
                             st.success(f"✅ Deleted alert for {alert['symbol']}")
-                            # Refresh alerts after delete
                             st.session_state.alerts_cache = fetch_alerts(username)
                         else:
                             st.error("❌ Failed to delete alert.")
@@ -281,4 +278,4 @@ with tab3:
                     st.error(f"⚠️ Error adding {alert['symbol']}: {e}")
 
             st.session_state.bulk_alerts = [{"symbol": "", "condition": "above", "price": 0.0}]
-            st.session_state.refresh_alerts = True  # Refresh alerts after bulk add
+            st.session_state.refresh_alerts = True
