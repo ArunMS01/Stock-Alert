@@ -89,8 +89,11 @@ if st.session_state.get("logged_in_user") and st.sidebar.button("Logout"):
     st.session_state.pop("logged_in_user")
     st.session_state.show_login = True
     st.session_state.refresh_alerts = False
-    st.experimental_set_query_params()  # Clear query params
-    st.experimental_rerun()  # <-- Since rerun not allowed, remove this line if needed
+
+    # Clear query params with new API
+    st.query_params.clear()
+    # No rerun needed — stop here so login screen appears
+    st.stop()
 
 if st.session_state.show_login or "logged_in_user" not in st.session_state:
     users = fetch_users()
@@ -136,7 +139,6 @@ with tab1:
                     st.error(f"❌ {response.json().get('error', 'Failed to add alert.')}")
             except Exception as e:
                 st.error(f"⚠️ Connection error: {e}")
-
 with tab2:
     st.subheader("📋 Your Active Alerts")
 
@@ -152,10 +154,13 @@ with tab2:
             st.error(f"⚠️ Error fetching alerts: {e}")
             return []
 
-    # Fetch alerts when the tab is loaded or refresh flag is True
-    if "alerts_cache" not in st.session_state or st.session_state.refresh_alerts:
+    # Initial fetch or if refresh flag is True
+    if "alerts_cache" not in st.session_state:
         st.session_state.alerts_cache = fetch_alerts(username)
-        st.session_state.refresh_alerts = False
+
+    # Refresh button at the top
+    if st.button("🔄 Refresh Alerts"):
+        st.session_state.alerts_cache = fetch_alerts(username)
 
     alerts = st.session_state.alerts_cache
 
@@ -165,13 +170,14 @@ with tab2:
             with col1:
                 st.write(f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']}")
             with col2:
-                if st.button("🗑️", key=f"delete-{alert['id']}"):
+                delete_key = f"delete-{alert['id']}"
+                if st.button("🗑️", key=delete_key):
                     try:
                         del_response = requests.post(f"{API_BASE}/delete-alert", json={"id": alert["id"]})
                         if del_response.status_code == 200:
                             st.success(f"✅ Deleted alert for {alert['symbol']}")
-                            # Set refresh flag to True so alerts reload
-                            st.session_state.refresh_alerts = True
+                            # Refresh alerts after delete
+                            st.session_state.alerts_cache = fetch_alerts(username)
                         else:
                             st.error("❌ Failed to delete alert.")
                     except Exception as e:
