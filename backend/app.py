@@ -49,29 +49,33 @@ def save_users(users):
     with open(USERS_FILE, "w") as f:
         json.dump(users, f, indent=2)
 
-def register_users_from_updates():
-    updates = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates").json()
-    if not updates.get("ok"):
-        print("❌ Failed to get updates:", updates)
-        return
-    registered_users = load_users()
-    new_users = 0
-    for update in updates.get("result", []):
-        msg = update.get("message", {}) or update.get("edited_message", {})
-        user = msg.get("from", {})
-        username = user.get("username")
-        chat_id = user.get("id")
-        if username:
-            username = "@" + username
-            if username not in registered_users:
-                registered_users[username] = chat_id
-                new_users += 1
-                print(f"✅ Registered: {username} → Chat ID: {chat_id}")
-    if new_users:
-        save_users(registered_users)
-        print(f"💾 Saved {new_users} new user(s) to {USERS_FILE}")
-    else:
-        print("ℹ️ No new users to register.")
+def sync_users_from_telegram():
+    print("🔄 Syncing users from Telegram on startup...")
+    try:
+        updates = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates").json()
+        if not updates.get("ok"):
+            print("❌ Failed to get updates:", updates)
+            return
+        registered_users = load_users()
+        new_users = 0
+        for update in updates.get("result", []):
+            msg = update.get("message", {}) or update.get("edited_message", {})
+            user = msg.get("from", {})
+            username = user.get("username")
+            chat_id = user.get("id")
+            if username:
+                username = "@" + username
+                if username not in registered_users:
+                    registered_users[username] = chat_id
+                    new_users += 1
+                    print(f"✅ Registered: {username} → Chat ID: {chat_id}")
+        if new_users:
+            save_users(registered_users)
+            print(f"💾 Saved {new_users} new user(s) to {USERS_FILE}")
+        else:
+            print("ℹ️ No new users to register.")
+    except Exception as e:
+        print(f"❌ Exception during user sync: {e}")
 
 def send_telegram_alert(chat_id, message):
     requests.post(
@@ -100,6 +104,44 @@ def get_price(symbol):
         print(f"❌ Error fetching price for {symbol}: {e}")
         return None
 
+# === New endpoints for user signup/login ===
+
+@app.route("/get-users", methods=["GET"])
+def get_users():
+    users = load_users()
+    return jsonify(list(users.keys()))
+
+@app.route("/signup", methods=["POST"])
+def signup():
+    data = request.get_json()
+    username = data.get("username")
+    if not username or not username.startswith("@"):
+        return jsonify({"error": "Invalid username"}), 400
+
+    users = load_users()
+    if username in users:
+        return jsonify({"error": "Username already registered"}), 400
+
+    # Initially save with None chat_id until user messages the bot
+    users[username] = None
+    save_users(users)
+    return jsonify({"message": "User registered successfully", "username": username}), 200
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    print("Login request data:", data)  # debug log
+    username = data.get("username")
+    if not username or not username.startswith("@"):
+        return jsonify({"error": "Invalid username"}), 400
+
+    users = load_users()
+    print("Users loaded for login:", users)  # debug log
+    if username in users:
+        return jsonify({"message": "Login successful", "username": username}), 200
+    else:
+        return jsonify({"error": "User not registered"}), 401
+
 @app.route("/add-alert", methods=["POST"])
 def add_alert():
     data = request.get_json()
@@ -126,18 +168,12 @@ def add_alert():
 
 @app.route("/alerts", methods=["POST"])
 def get_alerts():
-    # Return all alerts, optionally filter by username
     data = request.get_json(silent=True) or {}
     username = data.get("username")
     alerts = load_alerts()
     if username:
         alerts = [alert for alert in alerts if alert["username"] == username]
     return jsonify(alerts)
-
-@app.route("/check-alerts", methods=["GET"])
-def check_alerts():
-    result = run_alert_check()
-    return jsonify(result), 200
 
 @app.route("/delete-alert", methods=["POST"])
 def delete_alert():
@@ -155,8 +191,15 @@ def delete_alert():
     save_alerts(new_alerts)
     return jsonify({"message": "Alert deleted successfully."}), 200
 
+# === Manual check endpoint for testing ===
+
+@app.route("/check-alerts", methods=["GET"])
+def check_alerts():
+    result = run_alert_check()
+    return jsonify(result), 200
+
 def run_alert_check():
-    register_users_from_updates()
+    sync_users_from_telegram()
     alerts = load_alerts()
     users = load_users()
     triggered = []
@@ -180,7 +223,7 @@ def run_alert_check():
                 message = f"🔔 {alert['symbol']} is {alert['condition']} {alert['price']} (Current: {current_price})"
                 send_telegram_alert(chat_id, message)
                 triggered.append(alert)
-            # Don't add to remaining_alerts — alert is deleted after trigger
+            # Do NOT add alert to remaining list — delete after triggered
         else:
             remaining_alerts.append(alert)
 
@@ -196,6 +239,8 @@ def run_alert_check():
 
     return {"triggered": triggered}
 
+# === Scheduler to check alerts every minute ===
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=run_alert_check, trigger="interval", minutes=1)
 scheduler.start()
@@ -203,4 +248,6 @@ scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == "__main__":
+    # Sync users once on startup
+    sync_users_from_telegram()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
