@@ -11,9 +11,34 @@ API_BASE = "https://stock-alert-odjb.onrender.com"
 
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
-# Inject JS to auto-open sidebar on both desktop and mobile
+
+# Inject JS+CSS to auto-open sidebar and show a slide hint
 components.html(
     """
+    <style>
+    .slide-hint {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        background: #fffa;
+        color: #333;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 13px;
+        z-index: 1000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        animation: fadeout 60s forwards;
+    }
+
+    @keyframes fadeout {
+        0% {opacity: 1;}
+        80% {opacity: 1;}
+        100% {opacity: 0;}
+    }
+    </style>
+
+    <div class="slide-hint">👉 Slide or tap top-left menu</div>
+
     <script>
     window.addEventListener('load', function() {
         const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
@@ -22,14 +47,13 @@ components.html(
         }
         const expander = window.parent.document.querySelector('[data-testid="stSidebar"] button[aria-label="Close sidebar"]');
         if (expander) {
-            expander.click(); // toggle open if initially closed
+            expander.click();
         }
     });
     </script>
     """,
     height=0
 )
-
 def signup():
     st.sidebar.header("🆕 Signup")
     st.sidebar.markdown(f"👉 Please message our Telegram bot first: [Click here to open bot]({BOT_LINK})")
