@@ -9,7 +9,6 @@ BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
 st.set_page_config(page_title="📈 Stock Alert System", page_icon="📊")
 
-
 def signup():
     st.sidebar.header("🆕 Signup")
     st.sidebar.markdown(f"👉 Please message our Telegram bot first: [Click here to open bot]({BOT_LINK})")
@@ -39,7 +38,6 @@ def signup():
             return False
     return False
 
-
 def login(users_dict):
     st.sidebar.header("🔐 Login")
 
@@ -48,6 +46,7 @@ def login(users_dict):
         if telegram_username in users_dict:
             st.session_state.logged_in_user = telegram_username
             st.sidebar.success(f"Logged in as {telegram_username}")
+            st.session_state.show_login = False
         else:
             st.sidebar.error("User not found. Please signup.")
 
@@ -56,7 +55,6 @@ def login(users_dict):
         key="login_telegram",
         on_change=do_login
     )
-
 
 def fetch_users():
     try:
@@ -70,7 +68,6 @@ def fetch_users():
         st.sidebar.error(f"Error fetching users: {e}")
         return {}
 
-
 def validate_symbol(symbol):
     if not symbol:
         return False
@@ -81,43 +78,25 @@ def validate_symbol(symbol):
     except:
         return False
 
+# Initialize session state flags
+if "show_login" not in st.session_state:
+    st.session_state.show_login = True
+if "refresh_alerts" not in st.session_state:
+    st.session_state.refresh_alerts = False
 
-def fetch_alerts(username):
-    try:
-        response = requests.post(f"{API_BASE}/alerts", json={"username": username})
-        if response.status_code == 200:
-            return response.json()
-        else:
-            st.error("⚠️ Failed to fetch your alerts.")
-            return []
-    except Exception as e:
-        st.error(f"⚠️ Error fetching alerts: {e}")
-        return []
+# Handle logout
+if st.session_state.get("logged_in_user") and st.sidebar.button("Logout"):
+    st.session_state.pop("logged_in_user")
+    st.session_state.show_login = True
+    st.session_state.refresh_alerts = False
+    st.experimental_set_query_params()  # Clear query params
+    st.experimental_rerun()  # <-- Since rerun not allowed, remove this line if needed
 
-
-# --- MAIN ---
-
-# Handle logout flag to reset session state cleanly
-if st.session_state.get("logged_out", False):
-    st.session_state.pop("logged_in_user", None)
-    st.session_state["logged_out"] = False
-    st.query_params = {}  # Clear query params
-    st.stop()  # Stop here so page reloads cleanly
-
-
-if "logged_in_user" not in st.session_state:
+if st.session_state.show_login or "logged_in_user" not in st.session_state:
     users = fetch_users()
     signup()
     login(users)
     st.stop()
-
-else:
-    st.sidebar.write(f"👤 Logged in as: **{st.session_state.logged_in_user}**")
-    if st.sidebar.button("Logout"):
-        st.session_state["logged_out"] = True
-        st.query_params = {}  # Clear query params
-        st.stop()
-
 
 username = st.session_state.logged_in_user
 
@@ -152,6 +131,7 @@ with tab1:
                 })
                 if response.status_code == 200:
                     st.success("✅ Alert added successfully!")
+                    st.session_state.refresh_alerts = True
                 else:
                     st.error(f"❌ {response.json().get('error', 'Failed to add alert.')}")
             except Exception as e:
@@ -160,11 +140,24 @@ with tab1:
 with tab2:
     st.subheader("📋 Your Active Alerts")
 
-    if "alerts_updated" not in st.session_state:
-        st.session_state["alerts_updated"] = 0
+    def fetch_alerts(username):
+        try:
+            response = requests.post(f"{API_BASE}/alerts", json={"username": username})
+            if response.status_code == 200:
+                return response.json()
+            else:
+                st.error("⚠️ Failed to fetch your alerts.")
+                return []
+        except Exception as e:
+            st.error(f"⚠️ Error fetching alerts: {e}")
+            return []
 
-    # Fetch alerts fresh each run
-    alerts = fetch_alerts(username)
+    # Fetch alerts when the tab is loaded or refresh flag is True
+    if "alerts_cache" not in st.session_state or st.session_state.refresh_alerts:
+        st.session_state.alerts_cache = fetch_alerts(username)
+        st.session_state.refresh_alerts = False
+
+    alerts = st.session_state.alerts_cache
 
     if alerts:
         for alert in alerts:
@@ -177,10 +170,8 @@ with tab2:
                         del_response = requests.post(f"{API_BASE}/delete-alert", json={"id": alert["id"]})
                         if del_response.status_code == 200:
                             st.success(f"✅ Deleted alert for {alert['symbol']}")
-                            # Increment to trigger UI refresh
-                            st.session_state["alerts_updated"] += 1
-                            st.query_params = {}  # Clear query params
-                            st.stop()
+                            # Set refresh flag to True so alerts reload
+                            st.session_state.refresh_alerts = True
                         else:
                             st.error("❌ Failed to delete alert.")
                     except Exception as e:
@@ -239,3 +230,4 @@ with tab3:
                     st.error(f"⚠️ Error adding {alert['symbol']}: {e}")
 
             st.session_state.bulk_alerts = [{"symbol": "", "condition": "above", "price": 0.0}]
+            st.session_state.refresh_alerts = True  # Refresh alerts after bulk add
