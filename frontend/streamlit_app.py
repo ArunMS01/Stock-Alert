@@ -2,20 +2,22 @@ import streamlit as st
 import requests
 import yfinance as yf
 
-API_BASE = "https://stock-alert-odjb.onrender.com"
+# API Base URL
+API_BASE = "http://127.0.0.1:5000"
+
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
 
 st.title("📈 Stock Alert System")
 
-# 📢 Telegram Registration Info
+# Telegram registration info
 st.markdown("### 💬 Telegram Setup")
 st.info(f"""
 Before you receive alerts, **you must send a message** to our Telegram bot so we can get your Chat ID.
 👉 [Click here to message the bot]({BOT_LINK})
 """)
 
-# 📌 Validate stock symbol using yfinance
+# Validate stock symbol using yfinance
 def validate_symbol(symbol):
     if not symbol:
         return False
@@ -26,7 +28,7 @@ def validate_symbol(symbol):
     except:
         return False
 
-# 📊 New Alert Form
+# New Alert Form
 st.header("Set a New Price Alert")
 
 symbol = st.text_input("Stock Symbol (e.g., RELIANCE, TATAMOTORS)").strip().upper()
@@ -73,7 +75,7 @@ if st.button("Add Alert", disabled=not can_submit):
     except Exception as e:
         st.error(f"⚠️ Failed to connect to backend: {e}")
 
-# 📋 Fetch User Alerts
+# User Alerts Section
 st.header("📋 Your Active Alerts")
 
 username_for_alerts = st.text_input("Enter your Telegram username to view your alerts (e.g., @john_doe)").strip()
@@ -81,44 +83,51 @@ username_for_alerts = st.text_input("Enter your Telegram username to view your a
 if username_for_alerts and not username_for_alerts.startswith("@"):
     st.error("❌ Please enter a valid Telegram username starting with '@'.")
 elif username_for_alerts:
-    if st.button("Fetch My Alerts"):
+
+    def fetch_alerts(username):
         try:
-            response = requests.post(f"{API_BASE}/alerts", json={"username": username_for_alerts})
+            response = requests.post(f"{API_BASE}/alerts", json={"username": username})
             if response.status_code == 200:
-                alerts = response.json()
-
-                # Filter alerts for this user
-                user_alerts = [alert for alert in alerts if alert["username"] == username_for_alerts]
-
-                if user_alerts:
-                    for alert in user_alerts:
-                        col1, col2 = st.columns([4, 1])
-                        with col1:
-                            st.write(
-                                f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}"
-                            )
-                        with col2:
-                            delete_label = f"Delete-{alert['symbol']}-{alert['condition']}-{alert['price']}"
-                            if st.button("🗑️", key=delete_label):
-                                try:
-                                    del_response = requests.post(
-                                        f"{API_BASE}/delete-alert",
-                                        json={
-                                            "symbol": alert["symbol"],
-                                            "condition": alert["condition"],
-                                            "price": alert["price"],
-                                            "username": alert["username"],
-                                        },
-                                    )
-                                    if del_response.status_code == 200:
-                                        st.success(f"✅ Deleted alert for {alert['symbol']} {alert['condition']} {alert['price']}")
-                                    else:
-                                        st.error("❌ Failed to delete alert.")
-                                except Exception as e:
-                                    st.error(f"⚠️ Error deleting alert: {e}")
-                else:
-                    st.info("No active alerts for your username.")
+                return response.json()
             else:
                 st.error("⚠️ Failed to fetch your alerts.")
+                return []
         except Exception as e:
             st.error(f"⚠️ Failed to fetch your alerts: {e}")
+            return []
+
+    if "alerts_list" not in st.session_state:
+        st.session_state.alerts_list = []
+
+    if st.button("Fetch My Alerts"):
+        st.session_state.alerts_list = fetch_alerts(username_for_alerts)
+        st.session_state.show_refresh = False
+
+    user_alerts = [alert for alert in st.session_state.alerts_list if alert["username"] == username_for_alerts]
+
+    if user_alerts:
+        for alert in user_alerts:
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']} | User: {alert['username']}")
+            with col2:
+                delete_label = f"Delete-{alert['id']}"
+                if st.button("🗑️", key=delete_label):
+                    try:
+                        del_response = requests.post(f"{API_BASE}/delete-alert", json={"id": alert["id"]})
+                        if del_response.status_code == 200:
+                            st.success(f"✅ Deleted alert for {alert['symbol']} {alert['condition']} {alert['price']}")
+                            # Clear alerts and ask user to refresh manually
+                            st.session_state.alerts_list = []
+                            st.session_state.show_refresh = True
+                        else:
+                            st.error("❌ Failed to delete alert.")
+                    except Exception as e:
+                        st.error(f"⚠️ Error deleting alert: {e}")
+
+        if st.session_state.get("show_refresh", False):
+            if st.button("🔄 Refresh Alerts"):
+                st.session_state.alerts_list = fetch_alerts(username_for_alerts)
+                st.session_state.show_refresh = False
+    else:
+        st.info("No active alerts for your username.")
