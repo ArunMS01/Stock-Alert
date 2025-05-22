@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import yfinance as yf
 
-API_BASE = "https://stock-alert-odjb.onrender.com"
+API_BASE = "http://127.0.0.1:5000"
 
 TELEGRAM_BOT_USERNAME = "Order_ms_bot"
 BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
@@ -67,6 +67,28 @@ def fetch_users():
         st.sidebar.error(f"Error fetching users: {e}")
         return {}
 
+def validate_symbol(symbol):
+    if not symbol:
+        return False
+    try:
+        ticker = yf.Ticker(symbol + '.NS')
+        hist = ticker.history(period="1d")
+        return not hist.empty
+    except:
+        return False
+
+def fetch_alerts(username):
+    try:
+        response = requests.post(f"{API_BASE}/alerts", json={"username": username})
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error("⚠️ Failed to fetch your alerts.")
+            return []
+    except Exception as e:
+        st.error(f"⚠️ Error fetching alerts: {e}")
+        return []
+
 # --- MAIN ---
 
 if "logged_in_user" not in st.session_state:
@@ -79,8 +101,7 @@ else:
     st.sidebar.write(f"👤 Logged in as: **{st.session_state.logged_in_user}**")
     if st.sidebar.button("Logout"):
         st.session_state.pop("logged_in_user", None)
-        st.query_params = {}
-        st.stop()
+        st.experimental_rerun()  # <-- use rerun here to reset UI immediately
 
 username = st.session_state.logged_in_user
 
@@ -90,16 +111,6 @@ st.markdown(f"""
 Welcome **{username}**!  
 Make sure you have messaged our bot [here]({BOT_LINK}) to receive alerts.
 """)
-
-def validate_symbol(symbol):
-    if not symbol:
-        return False
-    try:
-        ticker = yf.Ticker(symbol + '.NS')
-        hist = ticker.history(period="1d")
-        return not hist.empty
-    except:
-        return False
 
 tab1, tab2, tab3 = st.tabs(["➕ Set Single Alert", "📋 My Alerts", "➕📊 Bulk Add Alerts"])
 
@@ -133,37 +144,27 @@ with tab1:
 with tab2:
     st.subheader("📋 Your Active Alerts")
 
-    def fetch_alerts(username):
-        try:
-            response = requests.post(f"{API_BASE}/alerts", json={"username": username})
-            if response.status_code == 200:
-                return response.json()
-            else:
-                st.error("⚠️ Failed to fetch your alerts.")
-                return []
-        except Exception as e:
-            st.error(f"⚠️ Error fetching alerts: {e}")
-            return []
+    # Always fetch alerts fresh on render
+    alerts = fetch_alerts(username)
 
-    if st.button("Fetch My Alerts"):
-        alerts = fetch_alerts(username)
-        if alerts:
-            for alert in alerts:
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.write(f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']}")
-                with col2:
-                    if st.button("🗑️", key=f"delete-{alert['id']}"):
-                        try:
-                            del_response = requests.post(f"{API_BASE}/delete-alert", json={"id": alert["id"]})
-                            if del_response.status_code == 200:
-                                st.success(f"✅ Deleted alert for {alert['symbol']}")
-                            else:
-                                st.error("❌ Failed to delete alert.")
-                        except Exception as e:
-                            st.error(f"⚠️ Delete error: {e}")
-        else:
-            st.info("No active alerts found.")
+    if alerts:
+        for alert in alerts:
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"🔔 {alert['symbol']} | {alert['condition']} {alert['price']}")
+            with col2:
+                if st.button("🗑️", key=f"delete-{alert['id']}"):
+                    try:
+                        del_response = requests.post(f"{API_BASE}/delete-alert", json={"id": alert["id"]})
+                        if del_response.status_code == 200:
+                            st.success(f"✅ Deleted alert for {alert['symbol']}")
+                            st.experimental_rerun()  # <-- rerun after delete to refresh alerts
+                        else:
+                            st.error("❌ Failed to delete alert.")
+                    except Exception as e:
+                        st.error(f"⚠️ Delete error: {e}")
+    else:
+        st.info("No active alerts found.")
 
 with tab3:
     st.subheader("➕📊 Set Multiple Stock Alerts")
