@@ -7,6 +7,7 @@ import yfinance as yf
 import atexit
 from datetime import datetime, time
 import pytz
+import uuid
 
 app = Flask(__name__)
 
@@ -14,7 +15,6 @@ ALERTS_FILE = "alerts.json"
 USERS_FILE = "telegram_users.json"
 BOT_TOKEN = "7675262445:AAEWZbsGgEHcdFa5gW0zWcDOigI0p_S84NY"  # Replace with your bot token
 
-# Market hours for NSE (9:15 AM - 3:30 PM IST)
 def is_market_open():
     india_tz = pytz.timezone('Asia/Kolkata')
     now = datetime.now(india_tz).time()
@@ -22,7 +22,6 @@ def is_market_open():
     market_close = time(15, 30)
     return market_open <= now <= market_close
 
-# Helper functions
 def load_alerts():
     if not os.path.exists(ALERTS_FILE):
         return []
@@ -83,7 +82,7 @@ def send_telegram_alert(chat_id, message):
 def get_price(symbol):
     if not is_market_open():
         print(f"ℹ️ Market closed — skipping price fetch for {symbol}")
-        return None  # Price unavailable outside market hours
+        return None
 
     if not symbol.endswith(".NS"):
         symbol = symbol + ".NS"
@@ -101,7 +100,6 @@ def get_price(symbol):
         print(f"❌ Error fetching price for {symbol}: {e}")
         return None
 
-# API endpoints
 @app.route("/add-alert", methods=["POST"])
 def add_alert():
     data = request.get_json()
@@ -115,6 +113,7 @@ def add_alert():
         return jsonify({"error": "Invalid NSE symbol or no data available"}), 400
 
     alert = {
+        "id": str(uuid.uuid4()),  # unique id for each alert
         "symbol": symbol,
         "condition": data["condition"],
         "price": data["price"],
@@ -123,11 +122,17 @@ def add_alert():
     alerts = load_alerts()
     alerts.append(alert)
     save_alerts(alerts)
-    return jsonify({"message": "Alert saved"}), 200
+    return jsonify({"message": "Alert saved", "alert_id": alert["id"]}), 200
 
 @app.route("/alerts", methods=["POST"])
 def get_alerts():
-    return jsonify(load_alerts())
+    # Return all alerts, optionally filter by username
+    data = request.get_json(silent=True) or {}
+    username = data.get("username")
+    alerts = load_alerts()
+    if username:
+        alerts = [alert for alert in alerts if alert["username"] == username]
+    return jsonify(alerts)
 
 @app.route("/check-alerts", methods=["GET"])
 def check_alerts():
@@ -137,21 +142,12 @@ def check_alerts():
 @app.route("/delete-alert", methods=["POST"])
 def delete_alert():
     data = request.get_json()
-    symbol = data.get("symbol", "").upper()
-    if not symbol.endswith(".NS"):
-        symbol = symbol + ".NS"
-    username = data.get("username")
-    condition = data.get("condition")
-    price = data.get("price")
+    alert_id = data.get("id")
+    if not alert_id:
+        return jsonify({"error": "Alert ID is required"}), 400
 
     alerts = load_alerts()
-
-    new_alerts = [alert for alert in alerts if not (
-        alert["symbol"] == symbol and
-        alert["username"] == username and
-        alert["condition"] == condition and
-        alert["price"] == price
-    )]
+    new_alerts = [alert for alert in alerts if alert["id"] != alert_id]
 
     if len(new_alerts) == len(alerts):
         return jsonify({"message": "No matching alert found to delete."}), 404
@@ -159,17 +155,19 @@ def delete_alert():
     save_alerts(new_alerts)
     return jsonify({"message": "Alert deleted successfully."}), 200
 
-# Background job function
 def run_alert_check():
     register_users_from_updates()
     alerts = load_alerts()
     users = load_users()
     triggered = []
+    remaining_alerts = []
 
     for alert in alerts:
         current_price = get_price(alert["symbol"])
+
         if current_price is None:
             print(f"ℹ️ Skipping alert for {alert['symbol']} because price unavailable.")
+            remaining_alerts.append(alert)
             continue
 
         hit = (alert["condition"] == "above" and current_price > alert["price"]) or \
@@ -182,6 +180,14 @@ def run_alert_check():
                 message = f"🔔 {alert['symbol']} is {alert['condition']} {alert['price']} (Current: {current_price})"
                 send_telegram_alert(chat_id, message)
                 triggered.append(alert)
+            # Don't add to remaining_alerts — alert is deleted after trigger
+        else:
+            remaining_alerts.append(alert)
+
+    save_alerts(remaining_alerts)
+
+    removed_count = len(alerts) - len(remaining_alerts)
+    print(f"🗑️ Removed {removed_count} triggered alert(s).")
 
     if triggered:
         print(f"✅ Triggered {len(triggered)} alert(s): {triggered}")
@@ -190,13 +196,11 @@ def run_alert_check():
 
     return {"triggered": triggered}
 
-# Scheduler setup
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=run_alert_check, trigger="interval", minutes=1)
 scheduler.start()
 
 atexit.register(lambda: scheduler.shutdown())
 
-# Run Flask app
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
